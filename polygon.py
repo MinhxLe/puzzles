@@ -298,6 +298,4 @@ def same_under_rotation(l1: list, l2: list):
 
 
 def catalan_number(n: int) -> int:
-    return math.factorial((2 * n) - 4) // (
-        math.factorial(n - 1) * math.factorial(n - 2)
-    )
+    return math.factorial(2 * n) // (math.factorial(n - 1) * math.factorial(n - 2))

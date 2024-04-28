@@ -8,3 +8,4 @@
 # failed paths
 - iterate through all cuts of a polygon and divide by 2 
 - caching overcounts solutions
+    - caching by hop count invariant to rotation and reflection
