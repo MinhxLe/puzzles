@@ -1,67 +1,31 @@
 from dataclasses import dataclass
+import dataclasses
 import math
 from functools import cached_property
-from typing import Counter, Tuple
+from typing import Any, Counter, Optional, Tuple
 
 
 @dataclass
-class V:
-    a: int
-    b: int
-    c: int
-
-
-def partition_polygon(idxs: list[int], vertices: list[int]) -> list[list[int]]:
-    idxs.sort()
-    vertices.sort()
-    return [vertices[idxs[i] : idxs[i + 1] + 1] for i in range(len(idxs) - 1)] + [
-        list(set(vertices[: idxs[0] + 1] + vertices[idxs[-1] :]))
-    ]
-
-
-@dataclass(frozen=True)
-class Polygon:
+class NPolygon:
     """
-    polygon defined by edges between set of vertices labeled by int on a N regular polyong
-    """
-
-    vertices: list[int]
-    N: int
-
-    def __post_init__(self):
-        assert len(set(self.vertices)) == len(self.vertices)
-        self.vertices.sort()
-
-    def canonical_form(self) -> Tuple[set[int], int]:
-        # sort vertices, index at 0
-        min_vertex = min(self.vertices)
-        return (set([(v - min_vertex) for v in self.vertices]), self.N)
-
-    def __hash__(self):
-        vertices, N = self.canonical_form()
-
-        return hash((tuple(vertices), N))
-
-    def partition(self, i: int, j: int) -> list["Polygon"]:
-        """
-        partition polygon with a segment from ith vertex to jth vertex
-        """
-        i_idx = self.vertices.index(i)
-        j_idx = self.vertices.index(j)
-        i_idx, j_idx = min(i_idx, j_idx), max(i_idx, j_idx)
-        return [
-            Polygon(self.vertices[i_idx : j_idx + 1], self.N),
-            Polygon(self.vertices[: i_idx + 1] + self.vertices[j_idx:], self.N),
-        ]
-
-
-@dataclass
-class Utils:
-    """
-    utils scoped to a N regular unit polygon
+    N dimensional unit regular polygon
     """
 
     N: int
+
+    def get_edge_distance(self, v1: int, v2: int) -> int:
+        """
+        clockwise distance on polygon between 2 vertices. Note that this
+        is NOT a commutative operation.
+        """
+        if v2 <= v1:
+            v2 += self.N
+        return v2 - v1
+
+    def add_edge_distance(self, v: int, n: int) -> int:
+        if n < 0:
+            n = self.N + n
+        return (v + n) % self.N
 
     @cached_property
     def R(self) -> float:
@@ -70,22 +34,15 @@ class Utils:
         """
         return (2 * math.sin(math.pi / self.N)) ** -1
 
-    def get_num_edges(self, v1: int, v2: int) -> int:
-        """
-        get number of edges between 2 vertices going any direction
-        """
-        assert v1 < self.N
-        assert v2 < self.N
-        distance = max(v1, v2) - min(v1, v2)
-        return min(distance, self.N - distance)
-
     def get_distance(self, v1: int, v2: int) -> float:
         """
         distance of line segment connecting 2 verices
         """
-        num_edges = self.get_num_edges(v1, v2)
+        edge_distance = self.get_edge_distance(v1, v2)
+        edge_distance = min(edge_distance, self.N - edge_distance)
+
         # interior angle between 2 vertices
-        alpha = num_edges * ((2 * math.pi) / self.N)
+        alpha = edge_distance * ((2 * math.pi) / self.N)
         # law of cosine
         return math.sqrt((2 * self.R**2) - (2 * self.R**2 * math.cos(alpha)))
 
@@ -102,117 +59,245 @@ class Utils:
         return math.sqrt(s * (s - d[0]) * (s - d[1]) * (s - d[2]))
 
 
-@dataclass
-class MaxTriangleCounter(Utils):
-    N: int
+@dataclass(frozen=True)
+class Polygon:
+    """
+    Polygon defined by edges between set of vertices labeled by int on a N regular polygon
+    """
 
-    def _get_valid_combo_counts(self, max_area: float, polygon: Polygon, cache) -> int:
-        if polygon in cache:
-            return cache[polygon]
-        vertices = polygon.vertices
-        if len(vertices) < 3:
+    vertices: list[int]
+    n_polygon: NPolygon
+
+    def __post_init__(self):
+        assert len(set(self.vertices)) == len(self.vertices)
+        assert all([v < self.n_polygon.N for v in self.vertices])
+        self.vertices.sort()
+
+    def __hash__(self):
+        return hash((tuple(self.vertices), self.n_polygon.N))
+
+    @cached_property
+    def edge_distances(self) -> list[int]:
+        """
+        return edge distances between every adjacent vertice in order. This should
+        sum up to N.
+        """
+        num_vertices = len(self.vertices)
+        return [
+            self.n_polygon.get_edge_distance(
+                self.vertices[i], self.vertices[(i + 1) % num_vertices]
+            )
+            for i in range(num_vertices)
+        ]
+
+    def rotate(self, n: int) -> "Polygon":
+        return Polygon(
+            [self.n_polygon.add_edge_distance(v, n) for v in self.vertices],
+            self.n_polygon,
+        )
+
+    def flip(self) -> "Polygon":
+        new_vertices = []
+        for v in self.vertices:
+            distance = self.n_polygon.get_edge_distance(self.vertices[0], v)
+            new_vertices.append(
+                self.n_polygon.add_edge_distance(self.vertices[0], -distance)
+            )
+        return Polygon(new_vertices, self.n_polygon)
+
+    def partition(self, i: int, j: int) -> list["Polygon"]:
+        """
+        partition polygon with a segment from ith vertex to jth vertex
+        """
+        i_idx = self.vertices.index(i)
+        j_idx = self.vertices.index(j)
+        i_idx, j_idx = min(i_idx, j_idx), max(i_idx, j_idx)
+        return [
+            # +1 since partitioning includes the partition vertices
+            Polygon(self.vertices[i_idx : j_idx + 1], self.n_polygon),
+            Polygon(self.vertices[: i_idx + 1] + self.vertices[j_idx:], self.n_polygon),
+        ]
+
+    @property
+    def num_triangle_combos(self) -> int:
+        # all polygons are convex so this still applies
+        if self.num_vertices < 3:
+            return 0
+        elif self.num_vertices == 3:
             return 1
-        elif len(vertices) == 3:
-            area = self.get_triangle_area(vertices)
-            if not math.isclose(area, max_area) and area < max_area:
+        else:
+            # this gives us number of combos for regular ngon that is
+            # reflection/rotation invariant
+            combos = catalan_number(self.num_vertices - 2)
+            return combos * self.num_vertices
+            # we want all combo
+            # we wan
+
+    def is_same(self, that: "Polygon") -> bool:
+        """
+        returns whether 2 polygon are the same under translation and reflection.
+        """
+        if self.n_polygon != that.n_polygon:
+            return False
+        return same_under_rotation(
+            self.edge_distances, that.edge_distances
+        ) or same_under_rotation(self.edge_distances, that.flip().edge_distances)
+
+    @cached_property
+    def area(self) -> float:
+        if len(self.vertices) < 3:
+            return 0.0
+        elif len(self.vertices) == 3:
+            return self.n_polygon.get_triangle_area(self.vertices)
+        else:
+            p1, p2 = self.partition(self.vertices[0], self.vertices[2])
+            assert len(p1.vertices) == 3
+            return p1.area + p2.area
+
+    @property
+    def num_vertices(self) -> int:
+        return len(self.vertices)
+
+
+@dataclass
+class PolygonCache:
+    """
+    cache for polygon that is translation/reflection invariant
+    """
+
+    def __init__(self):
+        self._cache = dict()
+
+    def _canon_form(self, p: Polygon):
+        return (p.n_polygon.N, tuple(p.edge_distances))
+
+    def __setitem__(self, polygon: Polygon, value) -> None:
+        for p in [polygon, polygon.flip()]:
+            for v in p.vertices:
+                # change the "start" for the polygon
+                canon_form = self._canon_form(p.rotate(-v))
+                if canon_form in self._cache:
+                    self._cache[canon_form] = value
+                    return None
+        self._cache[self._canon_form(polygon)] = value
+
+    def __getitem__(self, polygon: Polygon) -> Any:
+        for p in [polygon, polygon.flip()]:
+            for v in p.vertices:
+                # change the "start" for the polygon
+                canon_form = self._canon_form(p.rotate(-v))
+                if canon_form in self._cache:
+                    return self._cache[canon_form]
+        raise KeyError
+
+    def __contains__(self, polygon: Polygon) -> bool:
+        try:
+            self[polygon]
+            return True
+        except KeyError:
+            return False
+
+
+@dataclass
+class MaxTriangleCounter:
+    n_polygon: NPolygon
+    include_cache: bool = True
+
+    def _get_valid_combo_counts(
+        self,
+        max_area: float,
+        polygon: Polygon,
+        cache: Optional[PolygonCache],
+        edges_to_exclude: set[Tuple[int, int]],
+    ) -> int:
+        if polygon.num_vertices < 3:
+            return 1
+
+        if cache is not None and polygon in cache:
+            # TODO cache is broken because of edges to exclude
+            return cache[polygon]
+
+        if polygon.num_vertices == 3:
+            triangle = polygon
+            if not math.isclose(triangle.area, max_area) and triangle.area < max_area:
                 count = 1
             else:
                 count = 0
         else:
             count = 0
-            for i in range(len(vertices)):
-                for dist in range(2, len(vertices) - 1):  # exclude adjacent vertices
-                    j = (i + dist) % len(vertices)
-                    p1, p2 = polygon.partition(vertices[i], vertices[j])
+            edges_to_try = set()
+            for i in range(polygon.num_vertices):
+                j = (i + 2) % polygon.num_vertices
+                i, j = min(i, j), max(i, j)
+                v1, v2 = polygon.vertices[i], polygon.vertices[j]
+                edges_to_try.add((v1, v2))
+                # we have alrady included all counts that include this edge
+                if (v1, v2) in edges_to_exclude:
+                    count += 0
+                else:
+                    # copying because edges used in subsolution can be reused
+                    c = edges_to_exclude.copy()
+                    p1, p2 = polygon.partition(v1, v2)
                     count += self._get_valid_combo_counts(
-                        max_area, p1, cache
-                    ) * self._get_valid_combo_counts(max_area, p2, cache)
-            cache[polygon] = count
+                        max_area, p1, cache, c
+                    ) * self._get_valid_combo_counts(max_area, p2, cache, c)
+                    edges_to_exclude.add((v1, v2))
+            if cache is not None:
+                assert polygon not in cache
+                cache[polygon] = count
         return count
-
-    def get_max_triangle_count(self, idxs: list[int]) -> int:
-        assert len(idxs) == 3
-        full_polygon = Polygon(list(range(self.N)), self.N)
-        area = self.get_triangle_area(idxs)
-        idxs.sort()
-        i, j, k = idxs
-        p1, r1 = full_polygon.partition(i, j)
-        p2, r2 = r1.partition(j, k)
-        # remaining is the triangle
-        r3, p3 = r2.partition(i, k)
-        assert r3.vertices == idxs
-        cache = dict()
-        return (
-            self._get_valid_combo_counts(area, p1, cache)
-            * self._get_valid_combo_counts(area, p2, cache)
-            * self._get_valid_combo_counts(area, p3, cache)
-        )
 
     def get_all_max_triangle_counts(self) -> Tuple[Counter, int]:
         # without loss of generality, we pick 1 vertices to be 0
         counts = Counter()
-        i = 0
-        for j in range(1, self.N - 1):
-            for k in range(j + 1, self.N):
-                triangle = [i, j, k]
-                counts[tuple(triangle)] = self.get_max_triangle_count(triangle)
-        # every vertex has the same counts but every count is triple counted
-        # since it takes 3 vertices to make a get_triangle
-        total_count = sum(counts.values()) * self.N
-        assert total_count % 3 == 0
+        N = self.n_polygon.N
+        for i in range(N - 2):
+            for j in range(i + 1, N - 1):
+                for k in range(j + 1, N):
+                    triangle = Polygon([i, j, k], self.n_polygon)
+                    counts[triangle] = self.get_max_triangle_count(triangle)
+        total_count = sum(counts.values())
+        return counts, total_count
 
-        return counts, total_count // 3
-
-
-@dataclass
-class PolygonProblem(Utils):
-    N: int
-
-    def find_valid_count(
-        self, max_area: float, vertices: list[int], seen_partition: set[Tuple[int, int]]
-    ) -> int:
-        vertices.sort()
-        if len(vertices) < 3:
-            return 1
-        elif len(vertices) == 3:
-            area = self.get_triangle_area(vertices)
-            if not math.isclose(area, max_area) and area < max_area:
-                return 1
-            else:
-                return 0
+    def get_max_triangle_count(self, triangle: Polygon) -> int:
+        full_polygon = Polygon(list(range(self.n_polygon.N)), self.n_polygon)
+        p1, p2, p3 = self._get_paritions_minus_triangle(triangle, full_polygon)
+        if self.include_cache:
+            cache = PolygonCache()
         else:
-            count = 0
-            # how do you iterate through all triangle partitions?
-            for i in range(len(vertices)):
-                for dist in range(2, len(vertices) - 1):  # exclude adjacent vertices
-                    j = (i + dist) % len(vertices)
-                    if (i, j) not in seen_partition:
-                        seen_partition.add((i, j))
-                        p1, p2 = partition_polygon([i, j], vertices)
-                        count += self.find_valid_count(
-                            max_area,
-                            p1,
-                            seen_partition,
-                        ) * self.find_valid_count(max_area, p2, seen_partition)
-            return count
-
-    def find_max_triangle_count(self, triangle: list[int]) -> int:
-        max_area = self.get_triangle_area(triangle)
-        p1, p2, p3 = partition_polygon(triangle, list(range(self.N)))
-        return math.prod(
-            [
-                self.find_valid_count(max_area, p1, set()),
-                self.find_valid_count(max_area, p2, set()),
-                self.find_valid_count(max_area, p3, set()),
-            ]
+            cache = None
+        return (
+            self._get_valid_combo_counts(triangle.area, p1, cache, set())
+            * self._get_valid_combo_counts(triangle.area, p2, cache, set())
+            * self._get_valid_combo_counts(triangle.area, p3, cache, set())
         )
 
-    def find_all_max_triangle_count(self) -> Counter:
-        # without loss of generality, we pick 1 vertices to be 0
-        counts = Counter()
-        i = 0
-        for j in range(1, self.N - 1):
-            for k in range(j + 1, self.N):
-                triangle = [i, j, k]
-                counts[tuple(triangle)] = self.find_max_triangle_count(triangle)
-        return counts
+    def _get_paritions_minus_triangle(
+        self, triangle: Polygon, polygon: Polygon
+    ) -> list[Polygon]:
+        assert len(triangle.vertices) == 3
+        assert all([i in polygon.vertices] for i in triangle.vertices)
+        i, j, k = triangle.vertices
+        p1, r1 = polygon.partition(i, j)
+        p2, r2 = r1.partition(j, k)
+        # remaining is the triangle
+        r3, p3 = r2.partition(i, k)
+        assert r3 == triangle
+        return [p1, p2, p3]
+
+
+# Random utils
+def same_under_rotation(l1: list, l2: list):
+    if len(l1) != len(l2):
+        return False
+    repeated_l1 = l1 + l1
+    for i in range(len(l1)):
+        if repeated_l1[i : i + len(l1)] == l2:
+            return True
+    return False
+
+
+def catalan_number(n: int) -> int:
+    return math.factorial((2 * n) - 4) // (
+        math.factorial(n - 1) * math.factorial(n - 2)
+    )
