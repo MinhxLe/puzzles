@@ -1,3 +1,15 @@
+# Running the code
+```
+from polygon import (
+    Polygon,
+    MaxTriangleCounter,
+)
+N = 100
+counter = MaxTriangleCounter(NPolygon(N))
+counter.get_max_triangle_count()
+```
+
+
 # Introduction
 This problem can be simplified to finding the number of triangle partitions such that a candidate triangle is the unique maximum triangle. The total count will then be to iterate through all candidate triangles (0(N^3)).
 
@@ -48,6 +60,35 @@ There were 2 key insights:
 - if a polygon's area is smaller than the maximum area, this problem reduces to counting the number of unique diagonalization of the the polygon. 
 This insight lead to using catalan numbers which is O(n) for the factorial instead of a recursive relationship.
 
+# Iterating through Subproblems to prevent double counting
+2 key insights are that for every triangle partition of a polygon, boundary edge is part of exactly 1 triangle. This means so long as 2 solution have a different triangle selected for that edge, they do not overlap. This means we can iterate through all triangles for an arbitary edge of a polygon and calculate the subproblem of the remaining area.
+```
+def _get_valid_combo_counts(
+    self,
+    max_area: float,
+    polygon: Polygon,
+    cache: Optional[PolygonCache],
+) -> int:
+    # some leaf node conditions
+    
+    for i in range(2, polygon.num_vertices):
+        v1, v2, v3 = (
+            polygon.vertices[0],
+            polygon.vertices[1],
+            polygon.vertices[i],
+        )
+        triangle = Polygon([v1, v2, v3], self.n_polygon)
+        p1, p2, p3 = self._get_paritions_minus_triangle(triangle, polygon)
+        count += (
+            self._get_valid_combo_counts(max_area, triangle, cache)
+            * self._get_valid_combo_counts(max_area, p1, cache)
+            * self._get_valid_combo_counts(max_area, p2, cache)
+            * self._get_valid_combo_counts(max_area, p3, cache)
+        )
+```
 
-# [WIP] Curse of double counting 
-Incorporating (1) and (2) turns out much more challenging than expected because over double counting. When iterating over possible diagonals to partition a polygon, there will be certain solutions containing previous diagonals, resulting in double counting. I have not fully solved this yet but my current approach is to build a set of diagonals that we have already add as part of our count. We then select a diagonal must "cross" every diagonal in that set. Any solution including that diagonal will be not counted yet because of the crossing.  
+
+This took _a lot_ of dead ends when trying to exhaustively iterate through partitioning a polygon into sub problems. They included
+- iterating through all diagonals and dividing by 2
+- iterating through all triangles
+- iterating through all edges from a single vertex.

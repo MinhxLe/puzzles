@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-import dataclasses
 import math
 from functools import cached_property
 from typing import Any, Counter, Optional, Tuple
@@ -203,15 +202,10 @@ class MaxTriangleCounter:
         max_area: float,
         polygon: Polygon,
         cache: Optional[PolygonCache],
-        edges_to_exclude: set[Tuple[int, int]] = set(),
-        polygons_to_exclude: set[Polygon] = set(),
     ) -> int:
-        polygons_to_exclude = polygons_to_exclude.copy()
-        edges_to_exclude = edges_to_exclude.copy()
         if polygon.num_vertices < 3:
             return 1
         if cache is not None and polygon in cache:
-            # TODO cache is broken because of edges to exclude
             return cache[polygon]
 
         if polygon.num_vertices == 3:
@@ -221,38 +215,28 @@ class MaxTriangleCounter:
             else:
                 count = 0
         else:
-            if polygon in polygons_to_exclude:
-                return 0
-            if not math.isclose(polygon.area, max_area) and polygon.area < max_area:
-                # if the area of the polygon is < the max_area all triangulations are
+            if (
+                not math.isclose(polygon.area, max_area) and polygon.area < max_area
+            ):  # if the area of the polygon is < the max_area all triangulations are
                 # valid
                 return polygon.num_triangle_combos
             else:
                 count = 0
-                for i in range(polygon.num_vertices):
-                    j = (i + 2) % polygon.num_vertices
-                    i, j = min(i, j), max(i, j)
-                    v1, v2 = polygon.vertices[i], polygon.vertices[j]
-                    # we have alrady included all counts that include this edge
-                    if (v1, v2) in edges_to_exclude:
-                        count += 0
-                    else:
-                        # copying because edges used in subsolution can be reused
-                        p1, p2 = polygon.partition(v1, v2)
-                        polygons_to_exclude.add(p1)
-                        polygons_to_exclude.add(p2)
-                        count += self._get_valid_combo_counts(
-                            max_area,
-                            p1,
-                            cache,
-                            edges_to_exclude,
-                        ) * self._get_valid_combo_counts(
-                            max_area,
-                            p2,
-                            cache,
-                            edges_to_exclude,
-                        )
-                        edges_to_exclude.add((v1, v2))
+                # every edge vertex is part of exactly 1 triangle
+                for i in range(2, polygon.num_vertices):
+                    v1, v2, v3 = (
+                        polygon.vertices[0],
+                        polygon.vertices[1],
+                        polygon.vertices[i],
+                    )
+                    triangle = Polygon([v1, v2, v3], self.n_polygon)
+                    p1, p2, p3 = self._get_paritions_minus_triangle(triangle, polygon)
+                    count += (
+                        self._get_valid_combo_counts(max_area, triangle, cache)
+                        * self._get_valid_combo_counts(max_area, p1, cache)
+                        * self._get_valid_combo_counts(max_area, p2, cache)
+                        * self._get_valid_combo_counts(max_area, p3, cache)
+                    )
                 if cache is not None:
                     assert polygon not in cache
                     cache[polygon] = count

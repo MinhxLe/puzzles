@@ -48,7 +48,7 @@ class TestMaxTriangleCounter:
         assert c.get_max_triangle_count(P([1, 3, 5], 6)) == 1
 
     def test_get_max_triangle_count_8(self):
-        c = self.MTC(8, False)
+        c = self.MTC(8)
         assert c.get_max_triangle_count(P([0, 2, 4], 8)) == 4
 
     def test_get_max_triangle_count_7(self):
@@ -73,23 +73,24 @@ class TestMaxTriangleCounter:
         assert all_count == 42
 
     def test_get_all_8(self):
-        _, count = self.MTC(8, False).get_all_max_triangle_counts()
+        _, count = self.MTC(8).get_all_max_triangle_counts()
         assert count == 64
 
-    @pytest.mark.skip
     def test_get_all_10(self):
-        _, count = self.MTC(10, False).get_all_max_triangle_counts()
+        _, count = self.MTC(10).get_all_max_triangle_counts()
         assert count == 1010
 
-    @pytest.mark.skip
     def test_get_all_12(self):
-        _, count = self.MTC(12, False).get_all_max_triangle_counts()
+        _, count = self.MTC(12).get_all_max_triangle_counts()
         assert count == 13316
 
-    @pytest.mark.skip
     def test_get_all_15(self):
-        _, count = self.MTC(15, False).get_all_max_triangle_counts()
+        _, count = self.MTC(15).get_all_max_triangle_counts()
         assert count == 714340
+
+    def test_get_all_100(self):
+        _, count = self.MTC(100).get_all_max_triangle_counts()
+        assert count == 308571232
 
 
 class TestPolygon:
