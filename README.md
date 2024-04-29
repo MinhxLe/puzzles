@@ -44,8 +44,8 @@ def __getitem__(self, polygon: Polygon) -> Any:
 
 2. Catalan numbers
 There were 2 key insights:
-1. after a partition, both polygons are still convex.
-2. if a polygon's area is smaller than the maximum area, this problem reduces to counting the number of unique diagonalization of the the polygon. 
+- after a partition, both polygons are still convex.
+- if a polygon's area is smaller than the maximum area, this problem reduces to counting the number of unique diagonalization of the the polygon. 
 This insight lead to using catalan numbers which is O(n) for the factorial instead of a recursive relationship.
 
 
