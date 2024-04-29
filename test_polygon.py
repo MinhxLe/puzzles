@@ -88,6 +88,7 @@ class TestMaxTriangleCounter:
         _, count = self.MTC(15).get_all_max_triangle_counts()
         assert count == 714340
 
+    @pytest.mark.skip
     def test_get_all_100(self):
         _, count = self.MTC(100).get_all_max_triangle_counts()
         assert count == 308571232

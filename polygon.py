@@ -210,15 +210,12 @@ class MaxTriangleCounter:
 
         if polygon.num_vertices == 3:
             triangle = polygon
-            if not math.isclose(triangle.area, max_area) and triangle.area < max_area:
+            if not lt(triangle.area, max_area):
                 count = 1
             else:
                 count = 0
         else:
-            if (
-                not math.isclose(polygon.area, max_area) and polygon.area < max_area
-            ):  # if the area of the polygon is < the max_area all triangulations are
-                # valid
+            if lt(polygon.area, max_area):
                 return polygon.num_triangle_combos
             else:
                 count = 0
@@ -230,13 +227,16 @@ class MaxTriangleCounter:
                         polygon.vertices[i],
                     )
                     triangle = Polygon([v1, v2, v3], self.n_polygon)
-                    p1, p2, p3 = self._get_paritions_minus_triangle(triangle, polygon)
-                    count += (
-                        self._get_valid_combo_counts(max_area, triangle, cache)
-                        * self._get_valid_combo_counts(max_area, p1, cache)
-                        * self._get_valid_combo_counts(max_area, p2, cache)
-                        * self._get_valid_combo_counts(max_area, p3, cache)
-                    )
+                    if lt(triangle.area, max_area):
+                        p1, p2, p3 = self._get_paritions_minus_triangle(
+                            triangle, polygon
+                        )
+                        count += (
+                            self._get_valid_combo_counts(max_area, p1, cache)
+                            * self._get_valid_combo_counts(max_area, p2, cache)
+                            * self._get_valid_combo_counts(max_area, p3, cache)
+                        )
+
                 if cache is not None:
                     assert polygon not in cache
                     cache[polygon] = count
@@ -246,13 +246,15 @@ class MaxTriangleCounter:
         # without loss of generality, we pick 1 vertices to be 0
         counts = Counter()
         N = self.n_polygon.N
-        for i in range(N - 2):
-            for j in range(i + 1, N - 1):
-                for k in range(j + 1, N):
-                    triangle = Polygon([i, j, k], self.n_polygon)
-                    counts[triangle] = self.get_max_triangle_count(triangle)
-        total_count = sum(counts.values())
-        return counts, total_count
+        for j in range(1, N - 1):
+            for k in range(j + 1, N):
+                triangle = Polygon([0, j, k], self.n_polygon)
+                counts[triangle] = self.get_max_triangle_count(triangle)
+        # there is nothing special about the first vertex but we triple count
+        # since every triangle has 3 vertex.
+        total_count = sum(counts.values()) * N
+        assert total_count % 3 == 0
+        return counts, total_count // 3
 
     def get_max_triangle_count(self, triangle: Polygon) -> int:
         full_polygon = Polygon(list(range(self.n_polygon.N)), self.n_polygon)
@@ -294,3 +296,7 @@ def same_under_rotation(l1: list, l2: list):
 
 def catalan_number(n: int) -> int:
     return math.factorial(2 * n) // (math.factorial(n + 1) * math.factorial(n))
+
+
+def lt(n1: float, n2: float) -> bool:
+    return not math.isclose(n1, n2) and n1 < n2
