@@ -126,12 +126,7 @@ class Polygon:
         elif self.num_vertices == 3:
             return 1
         else:
-            # this gives us number of combos for regular ngon that is
-            # reflection/rotation invariant
-            combos = catalan_number(self.num_vertices - 2)
-            return combos * self.num_vertices
-            # we want all combo
-            # we wan
+            return catalan_number(self.num_vertices - 2)
 
     def is_same(self, that: "Polygon") -> bool:
         """
@@ -208,11 +203,13 @@ class MaxTriangleCounter:
         max_area: float,
         polygon: Polygon,
         cache: Optional[PolygonCache],
-        edges_to_exclude: set[Tuple[int, int]],
+        edges_to_exclude: set[Tuple[int, int]] = set(),
+        polygons_to_exclude: set[Polygon] = set(),
     ) -> int:
+        polygons_to_exclude = polygons_to_exclude.copy()
+        edges_to_exclude = edges_to_exclude.copy()
         if polygon.num_vertices < 3:
             return 1
-
         if cache is not None and polygon in cache:
             # TODO cache is broken because of edges to exclude
             return cache[polygon]
@@ -224,27 +221,41 @@ class MaxTriangleCounter:
             else:
                 count = 0
         else:
-            count = 0
-            edges_to_try = set()
-            for i in range(polygon.num_vertices):
-                j = (i + 2) % polygon.num_vertices
-                i, j = min(i, j), max(i, j)
-                v1, v2 = polygon.vertices[i], polygon.vertices[j]
-                edges_to_try.add((v1, v2))
-                # we have alrady included all counts that include this edge
-                if (v1, v2) in edges_to_exclude:
-                    count += 0
-                else:
-                    # copying because edges used in subsolution can be reused
-                    c = edges_to_exclude.copy()
-                    p1, p2 = polygon.partition(v1, v2)
-                    count += self._get_valid_combo_counts(
-                        max_area, p1, cache, c
-                    ) * self._get_valid_combo_counts(max_area, p2, cache, c)
-                    edges_to_exclude.add((v1, v2))
-            if cache is not None:
-                assert polygon not in cache
-                cache[polygon] = count
+            if polygon in polygons_to_exclude:
+                return 0
+            if not math.isclose(polygon.area, max_area) and polygon.area < max_area:
+                # if the area of the polygon is < the max_area all triangulations are
+                # valid
+                return polygon.num_triangle_combos
+            else:
+                count = 0
+                for i in range(polygon.num_vertices):
+                    j = (i + 2) % polygon.num_vertices
+                    i, j = min(i, j), max(i, j)
+                    v1, v2 = polygon.vertices[i], polygon.vertices[j]
+                    # we have alrady included all counts that include this edge
+                    if (v1, v2) in edges_to_exclude:
+                        count += 0
+                    else:
+                        # copying because edges used in subsolution can be reused
+                        p1, p2 = polygon.partition(v1, v2)
+                        polygons_to_exclude.add(p1)
+                        polygons_to_exclude.add(p2)
+                        count += self._get_valid_combo_counts(
+                            max_area,
+                            p1,
+                            cache,
+                            edges_to_exclude,
+                        ) * self._get_valid_combo_counts(
+                            max_area,
+                            p2,
+                            cache,
+                            edges_to_exclude,
+                        )
+                        edges_to_exclude.add((v1, v2))
+                if cache is not None:
+                    assert polygon not in cache
+                    cache[polygon] = count
         return count
 
     def get_all_max_triangle_counts(self) -> Tuple[Counter, int]:
@@ -267,9 +278,9 @@ class MaxTriangleCounter:
         else:
             cache = None
         return (
-            self._get_valid_combo_counts(triangle.area, p1, cache, set())
-            * self._get_valid_combo_counts(triangle.area, p2, cache, set())
-            * self._get_valid_combo_counts(triangle.area, p3, cache, set())
+            self._get_valid_combo_counts(triangle.area, p1, cache)
+            * self._get_valid_combo_counts(triangle.area, p2, cache)
+            * self._get_valid_combo_counts(triangle.area, p3, cache)
         )
 
     def _get_paritions_minus_triangle(
@@ -298,4 +309,4 @@ def same_under_rotation(l1: list, l2: list):
 
 
 def catalan_number(n: int) -> int:
-    return math.factorial(2 * n) // (math.factorial(n - 1) * math.factorial(n - 2))
+    return math.factorial(2 * n) // (math.factorial(n + 1) * math.factorial(n))

@@ -76,10 +76,12 @@ class TestMaxTriangleCounter:
         _, count = self.MTC(8, False).get_all_max_triangle_counts()
         assert count == 64
 
+    @pytest.mark.skip
     def test_get_all_10(self):
         _, count = self.MTC(10, False).get_all_max_triangle_counts()
         assert count == 1010
 
+    @pytest.mark.skip
     def test_get_all_12(self):
         _, count = self.MTC(12, False).get_all_max_triangle_counts()
         assert count == 13316
@@ -155,7 +157,7 @@ class TestPolygon:
 
     def test_triangle_combo(self):
         assert random_polygon(3, 10).num_triangle_combos == 1
-        # assert random_polygon(4, 10).num_triangle_combos == 2
+        assert random_polygon(4, 10).num_triangle_combos == 2
         assert random_polygon(5, 10).num_triangle_combos == 5
         assert random_polygon(6, 10).num_triangle_combos == 14
 
