@@ -210,21 +210,27 @@ class MaxTriangleCounter:
 
         if polygon.num_vertices == 3:
             triangle = polygon
-            if not lt(triangle.area, max_area):
+            if lt(triangle.area, max_area):
                 count = 1
             else:
                 count = 0
         else:
             if lt(polygon.area, max_area):
-                return polygon.num_triangle_combos
+                # if the area of the polygon is < the max_area all triangulations are valid
+                count = polygon.num_triangle_combos
             else:
                 count = 0
+                # using a heuristic of the largest edge being most likely
+                # a triangle that disqualifies the rest of the search tree
+                i1 = argmax(polygon.edge_distances)
+                i2 = (i1 + 1) % polygon.num_vertices
                 # every edge vertex is part of exactly 1 triangle
-                for i in range(2, polygon.num_vertices):
+                for n in range(1, polygon.num_vertices - 1):
+                    i3 = (i2 + n) % polygon.num_vertices
                     v1, v2, v3 = (
-                        polygon.vertices[0],
-                        polygon.vertices[1],
-                        polygon.vertices[i],
+                        polygon.vertices[i1],
+                        polygon.vertices[i2],
+                        polygon.vertices[i3],
                     )
                     triangle = Polygon([v1, v2, v3], self.n_polygon)
                     if lt(triangle.area, max_area):
@@ -300,3 +306,7 @@ def catalan_number(n: int) -> int:
 
 def lt(n1: float, n2: float) -> bool:
     return not math.isclose(n1, n2) and n1 < n2
+
+
+def argmax(l: list):
+    return max(range(len(l)), key=l.__getitem__)
